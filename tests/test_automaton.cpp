@@ -13,7 +13,7 @@
 #include <iostream>
 #include <string>
 
-static const std::string POLICY = "../policies/tcu_rd_rc_policy.json";
+static const std::string POLICY = "policies/tcu_rd_rc_policy.json";
 
 // Convenience key builders
 static std::string k(const std::string& f, const std::string& t, const std::string& m)
