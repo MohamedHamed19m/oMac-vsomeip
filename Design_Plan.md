@@ -87,13 +87,27 @@ class ReferenceMonitor {
 public:
     explicit ReferenceMonitor(const std::string& policy_filepath);
 
-    // Intercepts and validates outgoing/incoming message payloads
-    bool intercept_and_validate(uint8_t* payload_data, size_t& payload_len);
+    // Validates payload footer presence, CMAC authenticity, and policy transition
+    bool check(const std::vector<uint8_t>& payload_buf,
+               const std::string&          from_name,
+               const std::string&          to_name,
+               const std::string&          method_name);
+
+    void reset();
+    std::string current_state() const;
 
 private:
     SimpleAutomaton automaton_;
+    std::mutex      mutex_;
 };
 ```
+
+#### Distributed State Synchronization
+Because each process (e.g. `app_up` vs `safety_uc`) runs its own reference monitor instance, state machines are naturally isolated. Since the protected server only receives forwarded calls and never witnesses client-to-broker handshake messages, a naive sequence check would fail. 
+
+To solve this, the monitor implements a secure **State Synchronization** mechanism:
+- **Client Nodes (starting with "NAD"):** The monitor strictly validates the sequence against the current local state.
+- **Broker Nodes (not starting with "NAD"):** The receiver validates the CMAC. If authentic, it trusts that the broker's reference monitor verified the sequence and automatically synchronizes its local state machine to match the expected state of the transition, allowing the call.
 
 ---
 
