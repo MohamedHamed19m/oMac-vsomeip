@@ -1,0 +1,61 @@
+{
+  "name": "TCU Remote Diagnostic and Remote Control",
+  "initial_state": "idle",
+  "default": "deny",
+  "transitions": [
+    {
+      "comment":        "F1-a: NAD initiates a Remote Diagnostic session",
+      "from_state":     "idle",
+      "from_component": "NAD::4G",
+      "to_component":   "AppuP::RD",
+      "method":         "invoke_RD",
+      "to_state":       "nad_called_rd",
+      "allow":          true
+    },
+    {
+      "comment":        "F1-b: App µP forwards the Diagnostic call to Safety µC",
+      "from_state":     "nad_called_rd",
+      "from_component": "AppuP::RD",
+      "to_component":   "SafetyuC::Diag",
+      "method":         "invoke_Diag",
+      "to_state":       "idle",
+      "allow":          true
+    },
+    {
+      "comment":        "F2-a: NAD initiates a Remote Control session",
+      "from_state":     "idle",
+      "from_component": "NAD::4G",
+      "to_component":   "AppuP::RC",
+      "method":         "invoke_RC",
+      "to_state":       "nad_called_rc",
+      "allow":          true
+    },
+    {
+      "comment":        "F2-b: App µP forwards the Control call to Safety µC",
+      "from_state":     "nad_called_rc",
+      "from_component": "AppuP::RC",
+      "to_component":   "SafetyuC::Ctrl",
+      "method":         "invoke_Ctrl",
+      "to_state":       "idle",
+      "allow":          true
+    },
+    {
+      "comment":        "F3 BLOCKED: RC component must NOT call Diag directly",
+      "from_state":     "nad_called_rc",
+      "from_component": "AppuP::RC",
+      "to_component":   "SafetyuC::Diag",
+      "method":         "invoke_Diag",
+      "to_state":       "nad_called_rc",
+      "allow":          false
+    },
+    {
+      "comment":        "F4 BLOCKED: GPS must NOT initiate RD",
+      "from_state":     "idle",
+      "from_component": "NAD::GPS",
+      "to_component":   "AppuP::RD",
+      "method":         "invoke_RD",
+      "to_state":       "idle",
+      "allow":          false
+    }
+  ]
+}
