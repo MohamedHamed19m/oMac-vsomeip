@@ -25,7 +25,7 @@
             "unreliable" : "30510"
         }
     ],
-    "routing" : "app_up",
+    "routing" : "safety_uc",
     "service-discovery" :
     {
         "enable"                  : "true",

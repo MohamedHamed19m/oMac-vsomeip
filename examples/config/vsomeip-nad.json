@@ -23,7 +23,7 @@
             "instance" : "0x0001"
         }
     ],
-    "routing" : "nad_app",
+    "routing" : "safety_uc",
     "service-discovery" :
     {
         "enable"                  : "true",
