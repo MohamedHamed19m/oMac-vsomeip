@@ -11,8 +11,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # OpenSSL — required for AES-128-CMAC
 find_package(OpenSSL REQUIRED)
 
-# nlohmann/json — header-only, bundled in third_party/
-set(NLOHMANN_JSON_INCLUDE ${CMAKE_SOURCE_DIR}/third_party)
+# nlohmann/json — downloaded automatically at configure time
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    URL      https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp
+    DOWNLOAD_NO_EXTRACT TRUE          # it's a single header, not an archive
+    DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/nlohmann
+)
+FetchContent_MakeAvailable(nlohmann_json)
+set(NLOHMANN_JSON_INCLUDE ${CMAKE_BINARY_DIR}/nlohmann)
 
 # ---------------------------------------------------------------------------
 # omac — core static library (no vsomeip dependency)
@@ -31,7 +39,7 @@ add_library(omac STATIC
 
 target_include_directories(omac PUBLIC
     ${CMAKE_SOURCE_DIR}/include
-    ${NLOHMANN_JSON_INCLUDE}
+    ${NLOHMANN_JSON_INCLUDE}           # points to build/nlohmann/ after FetchContent
 )
 
 target_link_libraries(omac PUBLIC OpenSSL::SSL OpenSSL::Crypto)
