@@ -20,7 +20,7 @@ FetchContent_Declare(
     DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/nlohmann
 )
 FetchContent_MakeAvailable(nlohmann_json)
-set(NLOHMANN_JSON_INCLUDE ${CMAKE_BINARY_DIR}/nlohmann)
+set(NLOHMANN_JSON_INCLUDE ${CMAKE_BINARY_DIR})
 
 # ---------------------------------------------------------------------------
 # omac — core static library (no vsomeip dependency)

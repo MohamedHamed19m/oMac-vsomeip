@@ -1,6 +1,6 @@
 #include "automaton.hpp"
 
-#include "../third_party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <fstream>
 #include <stdexcept>
