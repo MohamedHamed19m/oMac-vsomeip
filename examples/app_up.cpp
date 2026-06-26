@@ -7,12 +7,15 @@
 //   SERVER  — offers RD (0x1111) and RC (0x2222) to the NAD
 //   CLIENT  — forwards allowed calls to SafetyUC (Diag 0x3333, Ctrl 0x4444)
 //
-// Security:
-//   The ReferenceMonitor checks EVERY inbound message before forwarding.
-//   A message is forwarded only when:
-//     1. The OMacFooter is present
-//     2. The CMAC tag is authentic
-//     3. The automaton allows the call in the current state
+// Security (paper-faithful):
+//   Uses SecuredMessage::from_incoming() which internally applies
+//   SecuredPayload deserialization logic:
+//     1. Extract the OMacFooter from the tail of the payload wire buffer.
+//     2. Verify the magic sentinel.
+//     3. Verify CMAC — drop immediately on failure.
+//     4. Check the state automaton — drop on policy mismatch.
+//   Forwarded messages are built using SecuredPayload::make_outbound() which
+//   overrides serialize() to re-sign and append the footer transparently.
 //
 // Usage:
 //   ./app_up <path/to/tcu_rd_rc_policy.json>
@@ -23,7 +26,7 @@
 
 #include "reference_monitor.hpp"
 #include "crypto.hpp"
-#include "footer.hpp"
+#include "secured_message.hpp"
 
 #include <vsomeip/vsomeip.hpp>
 
@@ -78,13 +81,15 @@ public:
         app_->register_message_handler(RD_SERVICE, INSTANCE, METHOD_INVOKE,
             [this](const std::shared_ptr<vsomeip::message>& msg) {
                 on_nad_call(msg, "NAD::4G", "AppuP::RD", "invoke_RD",
-                            DIAG_SERVICE, "AppuP::RD", "SafetyuC::Diag", "invoke_Diag");
+                            DIAG_SERVICE, "AppuP::RD", "SafetyuC::Diag", "invoke_Diag",
+                            0x0003);
             });
 
         app_->register_message_handler(RC_SERVICE, INSTANCE, METHOD_INVOKE,
             [this](const std::shared_ptr<vsomeip::message>& msg) {
                 on_nad_call(msg, "NAD::4G", "AppuP::RC", "invoke_RC",
-                            CTRL_SERVICE, "AppuP::RC", "SafetyuC::Ctrl", "invoke_Ctrl");
+                            CTRL_SERVICE, "AppuP::RC", "SafetyuC::Ctrl", "invoke_Ctrl",
+                            0x0004);
             });
 
         app_->offer_service(RD_SERVICE, INSTANCE);
@@ -135,29 +140,39 @@ private:
     // -----------------------------------------------------------------------
     // on_nad_call — called when NAD sends a message to this broker.
     //
-    // Checks:  footer present → MAC valid → automaton allows
-    // If all pass, builds a new signed message and forwards to SafetyUC.
+    // Paper-faithful gate:
+    //   SecuredMessage::from_incoming() — handles footer extraction,
+    //   magic check, and CMAC verification in one call (mirrors the
+    //   overridden deserialize() in SecuredPayload).
+    //
+    // If validation passes, the automaton is queried via monitor_.check().
+    // Allowed calls are re-signed and forwarded using SecuredPayload::make_outbound().
     // -----------------------------------------------------------------------
     void on_nad_call(const std::shared_ptr<vsomeip::message>& msg,
                      const std::string& from,    const std::string& to,
                      const std::string& method,
                      vsomeip::service_t fwd_service,
                      const std::string& fwd_from, const std::string& fwd_to,
-                     const std::string& fwd_method)
+                     const std::string& fwd_method,
+                     uint16_t           fwd_method_id)
     {
-        auto pl = msg->get_payload();
-        std::vector<uint8_t> buf(pl->get_data(), pl->get_data() + pl->get_length());
-
         std::cout << "[AppUP] Received call: " << from << " → " << to
                   << " : " << method << "\n";
 
-        // Gate: reference monitor decides
-        if (!monitor_.check(buf, from, to, method)) {
+        // ---- Paper-faithful gate: SecuredMessage wraps footer verification --
+        auto smsg = omac::SecuredMessage::from_incoming(msg);
+        if (!smsg) {
+            std::cerr << "[AppUP] *** Call BLOCKED — SecuredPayload verification failed ***\n";
+            return;
+        }
+
+        // ---- Automaton check via ReferenceMonitor --------------------------
+        if (!smsg->check(monitor_, from, to, method)) {
             std::cerr << "[AppUP] *** Call BLOCKED by monitor — dropping ***\n";
             return;
         }
 
-        // Wait for downstream service to be available (up to 2 s)
+        // ---- Wait for downstream service -----------------------------------
         {
             std::unique_lock<std::mutex> lk(avail_mutex_);
             bool& avail = (fwd_service == DIAG_SERVICE) ? diag_available_ : ctrl_available_;
@@ -168,23 +183,21 @@ private:
             }
         }
 
-        // Build forwarded message: extract application payload, re-sign as app_up
-        auto app_payload = payload_without_footer(buf);
-
-        OMacFooter fwd_footer;
-        fwd_footer.domain_id = 0x0002;  // AppuP domain
-        fwd_footer.method_id = (fwd_service == DIAG_SERVICE) ? 0x0003 : 0x0004;
-        crypto::sign_message(app_payload.data(), app_payload.size(), fwd_footer);
-        footer_append(app_payload, fwd_footer);
+        // ---- Build forwarded message using SecuredPayload::make_outbound ---
+        // The calling_method field is set to the forwarded method ID, as per paper:
+        // "In case of a method acting as a broker, the called method ID is
+        //  copied in the calling method field."
+        auto fwd_pl = omac::SecuredPayload::make_outbound(
+            smsg->app_data(),
+            0x0002,           // AppuP domain
+            fwd_method_id     // the forwarded method ID becomes calling_method
+        );
 
         auto fwd_msg = vsomeip::runtime::get()->create_request();
         fwd_msg->set_service(fwd_service);
         fwd_msg->set_instance(INSTANCE);
         fwd_msg->set_method(METHOD_INVOKE);
-
-        auto fwd_pl = vsomeip::runtime::get()->create_payload();
-        fwd_pl->set_data(app_payload);
-        fwd_msg->set_payload(fwd_pl);
+        fwd_msg->set_payload(fwd_pl);  // SecuredPayload — footer appended on serialize()
 
         app_->send(fwd_msg);
         std::cout << "[AppUP] Forwarded: " << fwd_from << " → " << fwd_to

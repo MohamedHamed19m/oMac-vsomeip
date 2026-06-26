@@ -14,14 +14,17 @@
 // This app only sends — the monitor output appears in the app_up terminal.
 //
 // Usage:
-//   ./nad_app <path/to/tcu_rd_rc_policy.json>
+//   ./nad_app
 //
 // vsomeip config (set via env var):
 //   VSOMEIP_CONFIGURATION=examples/config/vsomeip-nad.json
 //
+// Paper-faithful: uses SecuredPayload (subclass of vsomeip::payload) which
+// overrides serialize() to transparently append the OMacFooter on the wire.
+//
 
 #include "crypto.hpp"
-#include "footer.hpp"
+#include "secured_payload.hpp"
 
 #include <vsomeip/vsomeip.hpp>
 
@@ -51,26 +54,19 @@ static const std::array<uint8_t, 16> DEMO_KEY = {
 };
 
 // ---------------------------------------------------------------------------
-// Helper: build a properly signed vsomeip payload buffer.
+// Helper: build a SecuredPayload (paper-faithful — subclass of vsomeip::payload)
+// The footer is automatically computed and appended inside serialize() when
+// vsomeip sends the message on the wire. No manual footer_append() needed.
 // ---------------------------------------------------------------------------
 static std::shared_ptr<vsomeip::payload>
 make_payload(const std::string& app_data, uint16_t domain_id, uint16_t method_id)
 {
     std::vector<uint8_t> buf(app_data.begin(), app_data.end());
-
-    OMacFooter footer;
-    footer.domain_id = domain_id;
-    footer.method_id = method_id;
-    crypto::sign_message(buf.data(), buf.size(), footer);
-    footer_append(buf, footer);
-
-    auto pl = vsomeip::runtime::get()->create_payload();
-    pl->set_data(buf);
-    return pl;
+    return omac::SecuredPayload::make_outbound(buf, domain_id, method_id);
 }
 
 // ---------------------------------------------------------------------------
-// Helper: build a payload WITHOUT a footer (for the "no-footer" attack demo).
+// Helper: build a standard (unsecured) payload — no footer, for attack demo.
 // ---------------------------------------------------------------------------
 static std::shared_ptr<vsomeip::payload>
 make_unsigned_payload(const std::string& app_data)
@@ -250,5 +246,9 @@ int main(int argc, char* argv[])
 
     if (!g_app->init()) return 1;
     g_app->start();
+    g_app->stop();
     return 0;
 }
+
+
+

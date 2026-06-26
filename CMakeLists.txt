@@ -47,6 +47,7 @@ target_link_libraries(omac PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 # ---------------------------------------------------------------------------
 # Tests — always built, do NOT require vsomeip
 # ---------------------------------------------------------------------------
+enable_testing()
 add_subdirectory(tests)
 
 # ---------------------------------------------------------------------------

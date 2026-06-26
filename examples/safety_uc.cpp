@@ -9,6 +9,12 @@
 // Runs its own local ReferenceMonitor so it can independently validate
 // every call it receives — defence-in-depth against a compromised app_up.
 //
+// Paper-faithful:
+//   Uses SecuredMessage::from_incoming() which applies the SecuredPayload
+//   deserialization logic (footer extraction, magic check, CMAC verification)
+//   in one call, mirroring the overridden deserialize() method described in
+//   the paper's UML class diagram.
+//
 // Usage:
 //   ./safety_uc <path/to/tcu_rd_rc_policy.json>
 //
@@ -18,7 +24,7 @@
 
 #include "reference_monitor.hpp"
 #include "crypto.hpp"
-#include "footer.hpp"
+#include "secured_message.hpp"
 
 #include <vsomeip/vsomeip.hpp>
 
@@ -95,24 +101,30 @@ private:
                     const std::string& method,
                     const std::string& label)
     {
-        // Extract raw payload buffer from vsomeip message
         auto pl = msg->get_payload();
-        std::vector<uint8_t> buf(pl->get_data(), pl->get_data() + pl->get_length());
+        size_t bytes = pl ? pl->get_length() : 0;
+        std::cout << "[SafetyUC] Received " << label << " call (" << bytes << " bytes)\n";
 
-        std::cout << "[SafetyUC] Received " << label
-                  << " call (" << buf.size() << " bytes)\n";
-
-        bool allowed = monitor_.check(buf, from, to, method);
-        if (allowed) {
-            // Strip footer to get the real application bytes
-            auto payload = payload_without_footer(buf);
-            std::string data(payload.begin(), payload.end());
-            std::cout << "[SafetyUC] Executing " << label
-                      << " — data: \"" << data << "\"\n";
-        } else {
+        // ---- Paper-faithful gate: SecuredMessage wraps footer verification --
+        auto smsg = omac::SecuredMessage::from_incoming(msg);
+        if (!smsg) {
             std::cerr << "[SafetyUC] *** SECURITY VIOLATION — " << label
-                      << " call REJECTED ***\n";
+                      << " call REJECTED (bad footer/MAC) ***\n";
+            return;
         }
+
+        // ---- Automaton check with state synchronization for broker messages --
+        if (!smsg->check(monitor_, from, to, method)) {
+            std::cerr << "[SafetyUC] *** SECURITY VIOLATION — " << label
+                      << " call REJECTED (policy block) ***\n";
+            return;
+        }
+
+        // ---- Allowed: deliver clean application bytes to the service --------
+        const auto& app_bytes = smsg->app_data();
+        std::string data(app_bytes.begin(), app_bytes.end());
+        std::cout << "[SafetyUC] Executing " << label
+                  << " — data: \"" << data << "\"\n";
     }
 };
 
