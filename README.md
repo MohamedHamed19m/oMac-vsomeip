@@ -10,6 +10,8 @@ The implementation preserves the paper's secure wire-format behavior, CMAC-based
 
 To achieve fine-grained access control on automotive networks without breaking existing configurations, this repository implements a security layer based on three pillars:
 
+![oMac architecture overview](docs/model_architecture.png)
+
 1. **OMacFooter (24-byte Payload Tail):**
    A trailing footer appended directly to the end of standard SOME/IP payloads:
    - **Magic (4 bytes - `0x4F4D4143` / "OMAC"):** Detects footer presence.
@@ -83,6 +85,8 @@ This tests:
 * JSON-based security policy loading and state automaton transitions.
 * **UML Inheritance Mock Proof (`test_inheritance`):** Verifies the paper's original model where a `SecuredMessageImpl` directly inherits from standard SOME/IP message classes and hooks footers/CMAC inside middleware serialization.
 
+![Test workflow](docs/testing.png)
+
 ### 3. Run the Multi-Process Demo
 
 The demo models the access control scenarios from the research paper (Figure 5) representing a Remote Diagnostic (RD) sequence, Remote Control (RC) duties separation, and GPS sender isolation.
@@ -136,3 +140,4 @@ The reference monitor processes transitions defined in a simple JSON format. You
 }
 ```
 Modify this file to define custom automotive access control logic, add components, or declare state paths.
+
