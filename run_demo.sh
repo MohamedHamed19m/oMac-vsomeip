@@ -32,7 +32,7 @@ trap cleanup EXIT INT TERM
 echo "[1/4] Configuring and building"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
-cmake ..
+cmake -DOPENSSL_ROOT_DIR=/usr -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/x86_64-linux-gnu/libcrypto.so -DOPENSSL_SSL_LIBRARY=/usr/lib/x86_64-linux-gnu/libssl.so ..
 cmake --build . -j4
 
 echo "[2/4] Running tests"

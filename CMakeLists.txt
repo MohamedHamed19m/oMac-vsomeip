@@ -4,6 +4,15 @@ project(oMac-vsomeip VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Enable Automatic RPATH for linked Libraries (e.g. vsomeip3, OpenSSL)
+# so that the binaries can find their dynamic dependencies at runtime without needing to set LD_LIBRARY_PATH
+set(CMAKE_BUILD_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# Force DT_RPATH instead of DT_RUNPATH on Linux, to avoid issues with vsomeip3's RPATH handling
+if(UNIX AND NOT APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-new-dtags")
+endif()
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
