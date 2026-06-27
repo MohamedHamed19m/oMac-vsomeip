@@ -18,7 +18,9 @@ To achieve fine-grained access control on automotive networks without breaking e
    - **Domain ID (2 bytes):** Identifies the caller's functional domain (e.g., Telematic Unit vs. Safety).
    - **Method ID (2 bytes):** Identifies the calling method.
    - **AES-128-CMAC (16 bytes):** Authenticates the application payload and the metadata fields to prevent spoofing or replay.
-   
+
+![OMacFooter](oMAC_Packet.png)   
+
 2. **Backward Compatibility:**
    Because the security footer is placed at the end of payloads, legacy (un-extended) nodes on the SOME/IP network will only read the application data they expect and ignore the trailing 24 bytes, preventing protocol breakage.
 
